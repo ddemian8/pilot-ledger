@@ -6,7 +6,7 @@ interface __BaseEnv_Env {
 	ASSETS: Fetcher;
 	TEAM_DOMAIN: "https://young-salad-da1d.cloudflareaccess.com";
 	POLICY_AUD: "48df5137d051e442eb1678300f6f1251f63d8366136c7ff04908a724c49fea31";
-	ADMIN_EMAIL: "ddumitru6@gmail.com";
+	ADMIN_EMAIL: "ddemian6@gmail.com";
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

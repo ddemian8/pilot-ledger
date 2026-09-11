@@ -1,8 +1,7 @@
-import { createRemoteJWKSet, jwtVerify } from 'jose'
-
 interface Env {
   ASSETS: Fetcher
   DB: D1Database
+  EMAIL: { send(message: { to: string; from: string; subject: string; html: string; text: string }): Promise<unknown> }
   TEAM_DOMAIN: string
   POLICY_AUD: string
   ADMIN_EMAIL: string
@@ -46,22 +45,63 @@ async function exchange(request: Request) {
   } catch { return Response.json({ error: 'Cursul BNM nu este disponibil acum.' }, { status: 503 }) }
 }
 
+const encoder = new TextEncoder()
+async function hash(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(value))
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+function randomId(bytes = 24) {
+  const value = new Uint8Array(bytes); crypto.getRandomValues(value)
+  return [...value].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+function cookieValue(request: Request, name: string) {
+  return request.headers.get('Cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(`${name}=`))?.slice(name.length + 1)
+}
 async function identity(request: Request, env: Env) {
-  if (!env.TEAM_DOMAIN || !env.POLICY_AUD || !env.ADMIN_EMAIL) return null
-  const token = request.headers.get('cf-access-jwt-assertion')
-  if (!token) return null
-  try {
-    const { payload } = await jwtVerify(token, createRemoteJWKSet(new URL(`${env.TEAM_DOMAIN}/cdn-cgi/access/certs`)), { issuer: env.TEAM_DOMAIN, audience: env.POLICY_AUD })
-    const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : ''
-    if (email !== env.ADMIN_EMAIL.toLowerCase()) return null
-    return { email }
-  } catch { return null }
+  const session = cookieValue(request, 'pilot_session')
+  if (!session) return null
+  const row = await env.DB.prepare(`SELECT users.email, users.role FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id = ? AND sessions.expires_at > datetime('now')`).bind(session).first<{ email: string; role: string }>()
+  return row ? { email: row.email, role: row.role } : null
+}
+async function requestCode(request: Request, env: Env) {
+  const body = await request.json().catch(() => null) as { email?: string } | null
+  const email = body?.email?.trim().toLowerCase()
+  if (!email || email !== env.ADMIN_EMAIL.toLowerCase()) return Response.json({ error: 'Această adresă nu are acces.' }, { status: 403 })
+  const recent = await env.DB.prepare(`SELECT created_at FROM auth_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1`).bind(email).first<{ created_at: string }>()
+  if (recent && Date.now() - Date.parse(`${recent.created_at}Z`) < 60_000) return Response.json({ error: 'Așteaptă un minut înainte de a cere un cod nou.' }, { status: 429 })
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  const id = randomId()
+  const expires = new Date(Date.now() + 10 * 60_000).toISOString()
+  await env.DB.prepare(`INSERT INTO auth_codes (id, email, code_hash, expires_at) VALUES (?, ?, ?, ?)`).bind(id, email, await hash(`${id}:${code}`), expires).run()
+  await env.EMAIL.send({ to: email, from: `login@pilot-ledger.download`, subject: 'Codul tău Pilot Ledger', text: `Codul tău Pilot Ledger este ${code}. Expiră în 10 minute.`, html: `<p>Codul tău Pilot Ledger este:</p><h2>${code}</h2><p>Expiră în 10 minute.</p>` })
+  return Response.json({ sent: true })
+}
+async function verifyCode(request: Request, env: Env) {
+  const body = await request.json().catch(() => null) as { email?: string; code?: string } | null
+  const email = body?.email?.trim().toLowerCase(); const code = body?.code?.trim()
+  if (!email || email !== env.ADMIN_EMAIL.toLowerCase() || !/^\d{6}$/.test(code ?? '')) return Response.json({ error: 'Cod invalid.' }, { status: 400 })
+  const row = await env.DB.prepare(`SELECT id, code_hash FROM auth_codes WHERE email = ? AND consumed_at IS NULL AND expires_at > ? ORDER BY created_at DESC LIMIT 1`).bind(email, new Date().toISOString()).first<{ id: string; code_hash: string }>()
+  if (!row || await hash(`${row.id}:${code}`) !== row.code_hash) return Response.json({ error: 'Cod invalid sau expirat.' }, { status: 401 })
+  const userId = randomId(16); const sessionId = randomId(); const expires = new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString()
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO users (id, email, display_name, role) VALUES (?, ?, ?, 'admin') ON CONFLICT(email) DO UPDATE SET display_name = excluded.display_name`).bind(userId, email, 'Dumitru'),
+    env.DB.prepare(`INSERT INTO sessions (id, user_id, expires_at) SELECT ?, id, ? FROM users WHERE email = ?`).bind(sessionId, expires, email),
+    env.DB.prepare(`UPDATE auth_codes SET consumed_at = datetime('now') WHERE id = ?`).bind(row.id),
+  ])
+  return new Response(JSON.stringify({ user: { email, role: 'admin' } }), { headers: { 'Content-Type': 'application/json', 'Set-Cookie': `pilot_session=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000` } })
+}
+async function logout(request: Request, env: Env) {
+  const session = cookieValue(request, 'pilot_session'); if (session) await env.DB.prepare(`DELETE FROM sessions WHERE id = ?`).bind(session).run()
+  return new Response(null, { status: 204, headers: { 'Set-Cookie': 'pilot_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0' } })
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     if (url.pathname === '/api/exchange-rate' && request.method === 'GET') return exchange(request)
+    if (url.pathname === '/api/auth/request-code' && request.method === 'POST') return requestCode(request, env)
+    if (url.pathname === '/api/auth/verify-code' && request.method === 'POST') return verifyCode(request, env)
+    if (url.pathname === '/api/auth/logout' && request.method === 'POST') return logout(request, env)
     if (url.pathname === '/api/me' && request.method === 'GET') {
       const user = await identity(request, env)
       return user ? Response.json({ user }) : Response.json({ error: 'Autentificare necesară.' }, { status: 401 })

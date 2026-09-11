@@ -3,10 +3,11 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { ExchangeProvider } from './exchange'
 import './index.css'
+import { AuthGate } from './auth'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ExchangeProvider><App /></ExchangeProvider>
+    <ExchangeProvider><AuthGate><App /></AuthGate></ExchangeProvider>
   </StrictMode>,
 )
 
