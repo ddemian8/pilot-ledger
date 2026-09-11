@@ -102,9 +102,9 @@ async function parseReceipt(request: Request, env: Env) {
   if (file.size > 5 * 1024 * 1024) return Response.json({ error: 'Imaginea trebuie să fie mai mică de 5 MB.' }, { status: 413 })
   const bytes = new Uint8Array(await file.arrayBuffer()); let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte)
   const image = `data:${file.type};base64,${btoa(binary)}`
-  const result = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', { messages: [
+  const result = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', { image, messages: [
     { role: 'system', content: 'Ești un extractor de date din bonuri moldovenești. Răspunde doar cu JSON valid, fără markdown, cu cheile title, category, amount, currency, date. amount este număr pozitiv, currency este MDL sau EUR, date este YYYY-MM-DD. Dacă un câmp nu este lizibil, folosește null.' },
-    { role: 'user', content: 'Extrage datele de pe acest bon fiscal.', image },
+    { role: 'user', content: 'Extrage datele de pe acest bon fiscal.' },
   ], max_tokens: 300 })
   const raw = result?.response ?? ''; let data: Record<string, unknown> = {}
   try { data = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '').trim()) } catch { return Response.json({ error: 'Bonul nu a putut fi citit. Încearcă o fotografie mai clară.' }, { status: 422 }) }
