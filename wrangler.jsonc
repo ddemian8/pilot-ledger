@@ -3,6 +3,11 @@
   "name": "pilot-ledger",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-11",
+  "vars": {
+    "TEAM_DOMAIN": "https://young-salad-da1d.cloudflareaccess.com",
+    "POLICY_AUD": "48df5137d051e442eb1678300f6f1251f63d8366136c7ff04908a724c49fea31",
+    "ADMIN_EMAIL": "ddumitru6@gmail.com"
+  },
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application" },
   "d1_databases": [{ "binding": "DB", "database_name": "pilot-ledger-prod", "database_id": "9a4a02df-ccaa-4865-9bb3-2287c571b1ff", "migrations_dir": "./migrations" }],
   "observability": { "enabled": true }

@@ -1,6 +1,11 @@
+import { createRemoteJWKSet, jwtVerify } from 'jose'
+
 interface Env {
   ASSETS: Fetcher
   DB: D1Database
+  TEAM_DOMAIN: string
+  POLICY_AUD: string
+  ADMIN_EMAIL: string
 }
 
 type Rate = { date: string; mdlPerEur: number; source: 'BNM'; fetchedAt: string }
@@ -41,11 +46,32 @@ async function exchange(request: Request) {
   } catch { return Response.json({ error: 'Cursul BNM nu este disponibil acum.' }, { status: 503 }) }
 }
 
+async function identity(request: Request, env: Env) {
+  if (!env.TEAM_DOMAIN || !env.POLICY_AUD || !env.ADMIN_EMAIL) return null
+  const token = request.headers.get('cf-access-jwt-assertion')
+  if (!token) return null
+  try {
+    const { payload } = await jwtVerify(token, createRemoteJWKSet(new URL(`${env.TEAM_DOMAIN}/cdn-cgi/access/certs`)), { issuer: env.TEAM_DOMAIN, audience: env.POLICY_AUD })
+    const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : ''
+    if (email !== env.ADMIN_EMAIL.toLowerCase()) return null
+    return { email }
+  } catch { return null }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     if (url.pathname === '/api/exchange-rate' && request.method === 'GET') return exchange(request)
-    if (url.pathname.startsWith('/api/')) return Response.json({ error: 'API route unavailable until authentication is configured.' }, { status: 401 })
+    if (url.pathname === '/api/me' && request.method === 'GET') {
+      const user = await identity(request, env)
+      return user ? Response.json({ user }) : Response.json({ error: 'Autentificare necesară.' }, { status: 401 })
+    }
+    if (url.pathname.startsWith('/api/')) {
+      const user = await identity(request, env)
+      if (!user) return Response.json({ error: 'Autentificare necesară.' }, { status: 401 })
+      if (url.pathname === '/api/admin/status' && request.method === 'GET') return Response.json({ authenticated: true, role: 'admin', email: user.email })
+      return Response.json({ error: 'Ruta API nu este încă activată.' }, { status: 501 })
+    }
     return env.ASSETS.fetch(request)
   },
 }
