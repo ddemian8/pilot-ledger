@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 
 type EntryMode = 'expense' | 'income' | null
+type AppPage = 'overview' | 'transactions' | 'goals' | 'settings'
 
 
 function App() {
@@ -42,6 +43,11 @@ function App() {
   const [deleted, setDeleted] = useState<Transaction | null>(null)
   const [actionError, setActionError] = useState('')
   const [notice, setNotice] = useState('')
+  const [activePage, setActivePage] = useState<AppPage>(() => {
+    const hash = window.location.hash.replace('#', '')
+    return hash === 'transactions' || hash === 'goals' || hash === 'settings' ? hash : 'overview'
+  })
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [pendingCount, setPendingCount] = useState(() => { try { return readPending().filter(t => !t.ignored && !loaded.transactions.some(saved => saved.id === t.id)).length } catch { return 0 } })
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all')
@@ -109,18 +115,31 @@ function App() {
     } catch { setActionError('Nu am putut restaura tranzacția. Reîncarcă pagina dacă datele au fost modificate în altă fereastră.') }
   }
   const openEntry = (mode: EntryMode) => { setEditing(null); setEntryMode(mode) }
+  const navigate = (page: AppPage) => {
+    setActivePage(page)
+    setMobileMenuOpen(false)
+    window.history.replaceState(null, '', `#${page}`)
+    const target = document.getElementById(page === 'overview' ? 'dashboard' : page)
+    requestAnimationFrame(() => target?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    if (page === 'transactions') setShowAll(true)
+  }
+  useEffect(() => {
+    const onHash = () => { const hash = window.location.hash.replace('#', '') as AppPage; if (['overview', 'transactions', 'goals', 'settings'].includes(hash)) setActivePage(hash) }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   return (
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand-mark"><span className="brand-logo-art" aria-label="Pilot Ledger" /><div><strong>Pilot</strong><small>Ledger</small></div></div>
         <nav className="main-nav" aria-label="Navigație principală">
-          <a className="nav-item active" href="#dashboard"><Gauge size={19} /> Overview</a>
-          <a className="nav-item" href="#transactions" onClick={() => setShowAll(true)}><WalletCards size={19} /> Tranzacții</a>
-          <a className="nav-item" href="#goals"><Target size={19} /> Obiective</a>
+          <button className={`nav-item ${activePage === 'overview' ? 'active' : ''}`} onClick={() => navigate('overview')}><Gauge size={19} /> Overview</button>
+          <button className={`nav-item ${activePage === 'transactions' ? 'active' : ''}`} onClick={() => navigate('transactions')}><WalletCards size={19} /> Tranzacții</button>
+          <button className={`nav-item ${activePage === 'goals' ? 'active' : ''}`} onClick={() => navigate('goals')}><Target size={19} /> Obiective</button>
         </nav>
         <div className="sidebar-bottom">
-          <a className="nav-item" href="#settings"><Settings2 size={19} /> Setări</a>
+          <button className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><Settings2 size={19} /> Setări</button>
           <div className="profile"><div className="avatar">DD</div><div><strong>Dumitru</strong><span>Cont personal</span></div><ChevronRight size={16} /></div>
         </div>
       </aside>
@@ -128,8 +147,10 @@ function App() {
       <section className="content-area">
         <header className="topbar">
           <div className="mobile-brand"><span className="brand-logo-art" aria-label="Pilot Ledger" /><strong>Pilot Ledger</strong></div>
-          <div className="topbar-actions"><CurrencyToggle /><button className="icon-button mobile-menu" aria-label="Deschide meniul"><Menu size={21} /></button><button className="icon-button notification-button" aria-label={`Notificări: ${pendingCount} în așteptare`} onClick={() => { const inbox = document.getElementById('notifications'); inbox?.scrollIntoView({ block: 'start' }); inbox?.focus({ preventScroll: true }) }}><Bell size={19} />{pendingCount > 0 && <span className="notification-badge">{pendingCount}</span>}</button><div className="top-avatar">DD</div></div>
+          <div className="topbar-actions"><CurrencyToggle /><button className="icon-button mobile-menu" aria-label="Deschide meniul" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(value => !value)}><Menu size={21} /></button><button className="icon-button notification-button" aria-label={`Notificări: ${pendingCount} în așteptare`} onClick={() => { const inbox = document.getElementById('notifications'); inbox?.scrollIntoView({ block: 'start' }); inbox?.focus({ preventScroll: true }) }}><Bell size={19} />{pendingCount > 0 && <span className="notification-badge">{pendingCount}</span>}</button><div className="top-avatar">DD</div></div>
         </header>
+
+        {mobileMenuOpen && <div className="mobile-nav-drawer" role="dialog" aria-label="Meniu Pilot Ledger"><div className="mobile-drawer-head"><strong>Meniu</strong><button className="icon-button" onClick={() => setMobileMenuOpen(false)} aria-label="Închide meniul"><X size={20} /></button></div><button className={`nav-item ${activePage === 'overview' ? 'active' : ''}`} onClick={() => navigate('overview')}><Gauge size={19} /> Overview</button><button className={`nav-item ${activePage === 'transactions' ? 'active' : ''}`} onClick={() => navigate('transactions')}><WalletCards size={19} /> Tranzacții</button><button className={`nav-item ${activePage === 'goals' ? 'active' : ''}`} onClick={() => navigate('goals')}><Target size={19} /> Obiective</button><button className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><Settings2 size={19} /> Setări</button></div>}
 
         <div className="content-wrap">
           <div className="welcome-row">
@@ -142,7 +163,7 @@ function App() {
             <GlassAction mode="income" onActivate={() => openEntry('income')} />
           </section>
 
-          <section className="dashboard-grid">
+          <section className="dashboard-grid" id="goals">
             <SavingsGoalCard />
 
             <article className="month-panel">
@@ -182,6 +203,7 @@ function App() {
           <PendingInbox transactions={ledger} onApproved={setTransactions} onCount={setPendingCount} />
 
           <details className="exchange-details"><summary>Curs valutar · BNM</summary><ExchangeStatus /></details>
+          <section className="settings-section" id="settings" aria-labelledby="settings-title"><div className="section-heading"><div><p className="eyebrow">PREFERINȚE</p><h2 id="settings-title">Setări</h2></div><Settings2 className="green-icon" size={22} /></div><div className="settings-grid"><article className="settings-card"><p className="eyebrow">CONT</p><h3>Dumitru</h3><p>ddemian6@gmail.com</p><span>Cont personal Pilot Ledger</span></article><article className="settings-card"><p className="eyebrow">MONEDĂ DE AFIȘARE</p><h3>EUR și MDL</h3><p>Alege moneda principală din comutatorul de sus.</p><CurrencyToggle /></article><article className="settings-card"><p className="eyebrow">DATE</p><h3>Salvare locală</h3><p>Tranzacțiile rămân în browserul acestui dispozitiv.</p><button className="text-button" onClick={() => { setNotice('Datele sunt stocate local pe acest dispozitiv.') }}>Cum funcționează <ChevronRight size={15} /></button></article></div></section>
           <footer className="app-footer"><span><ScanLine size={16} /> Tranzacțiile sunt păstrate în acest browser</span><span>Salvare locală · acest browser</span></footer>
         </div>
       </section>
