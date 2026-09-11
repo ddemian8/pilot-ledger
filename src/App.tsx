@@ -206,7 +206,7 @@ function EntrySheet({ mode, initial, onClose, onSave }: { mode: 'expense' | 'inc
     {source === null ? <ImportSourcePicker mode={mode} onChoose={(next, file) => { setSource(next); setSelectedFile(file ?? null) }} /> : <>
       {selectedFile && <div className="import-selected"><strong>{selectedFile.name}</strong><span>{ocrState === 'reading' ? 'Se citește bonul…' : ocrState === 'done' ? 'Datele au fost extrase. Verifică-le înainte de salvare.' : ocrState === 'error' ? 'Nu am putut citi bonul. Completează câmpurile manual.' : ''}</span><button type="button" className="text-button" onClick={() => { setSource(null); setSelectedFile(null); setOcr(null); setOcrState('idle') }}>Alege altă sursă</button></div>}
       <p className="sheet-copy">Introdu suma în moneda în care ai plătit sau încasat.</p>
-      <TransactionForm mode={mode} initial={initial} prefill={ocr ? { title: ocr.title, category: ocr.category, amount: ocr.amount ?? undefined, originalCurrency: ocr.currency, date: ocr.date } : undefined} onClose={onClose} onSave={onSave} />
+      <TransactionForm key={`${initial?.id ?? 'new'}-${ocrState}`} mode={mode} initial={initial} prefill={ocr ? { title: ocr.title, category: ocr.category, amount: ocr.amount ?? undefined, originalCurrency: ocr.currency, date: ocr.date } : undefined} onClose={onClose} onSave={onSave} />
     </>}
     <p className="privacy-note"><ScanLine size={15} /> Salvare pe acest dispozitiv, în browserul curent.</p>
   </dialog>
