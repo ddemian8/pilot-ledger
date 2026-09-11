@@ -3,6 +3,8 @@ interface Env {
   DB: D1Database
   EMAIL: { send(message: { to: string; from: string; subject: string; html: string; text: string }): Promise<unknown> }
   AI: { run(model: string, input: unknown): Promise<{ response?: string }> }
+  AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT?: string
+  AZURE_DOCUMENT_INTELLIGENCE_KEY?: string
   TEAM_DOMAIN: string
   POLICY_AUD: string
   ADMIN_EMAIL: string
@@ -98,9 +100,24 @@ async function logout(request: Request, env: Env) {
 async function parseReceipt(request: Request, env: Env) {
   const user = await identity(request, env); if (!user) return Response.json({ error: 'Autentificare necesară.' }, { status: 401 })
   const form = await request.formData().catch(() => null); const file = form?.get('file')
-  if (!(file instanceof File) || !file.type.startsWith('image/')) return Response.json({ error: 'Încarcă o fotografie sau un screenshot al bonului.' }, { status: 400 })
+  if (!(file instanceof File) || (!file.type.startsWith('image/') && file.type !== 'application/pdf')) return Response.json({ error: 'Încarcă o fotografie, un screenshot sau un PDF al bonului.' }, { status: 400 })
   if (file.size > 5 * 1024 * 1024) return Response.json({ error: 'Imaginea trebuie să fie mai mică de 5 MB.' }, { status: 413 })
-  const bytes = new Uint8Array(await file.arrayBuffer()); let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte)
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  if (env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT && env.AZURE_DOCUMENT_INTELLIGENCE_KEY) {
+    const endpoint = env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT.replace(/\/$/, '')
+    const analyze = await fetch(`${endpoint}/documentintelligence/documentModels/prebuilt-receipt:analyze?api-version=2024-11-30`, { method: 'POST', headers: { 'Ocp-Apim-Subscription-Key': env.AZURE_DOCUMENT_INTELLIGENCE_KEY, 'Content-Type': file.type || 'application/octet-stream' }, body: bytes })
+    if (!analyze.ok) return Response.json({ error: 'Azure nu a putut analiza bonul. Verifică imaginea și încearcă din nou.' }, { status: 502 })
+    const operation = analyze.headers.get('operation-location')
+    if (!operation) return Response.json({ error: 'Azure nu a returnat operația de analiză.' }, { status: 502 })
+    let result: any = null
+    for (let attempt = 0; attempt < 12; attempt++) { await new Promise(resolve => setTimeout(resolve, 500)); const poll = await fetch(operation, { headers: { 'Ocp-Apim-Subscription-Key': env.AZURE_DOCUMENT_INTELLIGENCE_KEY } }); result = await poll.json().catch(() => null); if (result?.status === 'succeeded') break; if (result?.status === 'failed') return Response.json({ error: 'Azure nu a putut citi bonul.' }, { status: 422 }) }
+    if (result?.status !== 'succeeded') return Response.json({ error: 'Analiza bonului a durat prea mult. Încearcă o fotografie mai clară.' }, { status: 504 })
+    const fields = result.analyzeResult?.documents?.[0]?.fields ?? {}
+    const value = (name: string) => fields[name]?.valueString ?? fields[name]?.valueDate ?? fields[name]?.valueCurrency?.amount ?? null
+    const currency = fields.Total?.valueCurrency?.currencyCode === 'EUR' ? 'EUR' : 'MDL'
+    return Response.json({ extracted: { title: value('MerchantName') ?? '', category: 'Altele', amount: typeof value('Total') === 'number' ? value('Total') : null, currency, date: value('TransactionDate') ?? '' } })
+  }
+  let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte)
   const image = `data:${file.type};base64,${btoa(binary)}`
   const result = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', { image, messages: [
     { role: 'system', content: 'Ești un extractor de date din bonuri moldovenești. Răspunde doar cu JSON valid, fără markdown, cu cheile title, category, amount, currency, date. amount este număr pozitiv, currency este MDL sau EUR, date este YYYY-MM-DD. Dacă un câmp nu este lizibil, folosește null.' },
