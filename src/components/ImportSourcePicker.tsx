@@ -11,7 +11,7 @@ export function ImportSourcePicker({ mode, onChoose }: { mode: 'expense' | 'inco
       <label className="import-option"><span className="import-option-icon document"><FileText size={21} /></span><span><strong>PDF sau Screenshot</strong><small>Încarcă un PDF sau o captură de ecran</small></span><input type="file" accept="application/pdf,image/*" onChange={event => event.target.files?.[0] && onChoose('document', event.target.files[0])} /></label>
       <button type="button" className="import-option" onClick={() => onChoose('manual')}><span className="import-option-icon manual"><PenLine size={21} /></span><span><strong>Manual</strong><small>Completează detaliile singur</small></span><FileImage size={17} /></button>
     </div>
-    <p className="import-note">Fișierele sunt selectate doar pe acest dispozitiv. Extragerea automată a datelor va fi conectată în pasul OCR.</p>
+    <p className="import-note">Bonul este analizat automat, iar datele extrase pot fi verificate înainte de salvare.</p>
   </div>
 }
 

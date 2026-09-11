@@ -2,6 +2,7 @@ interface Env {
   ASSETS: Fetcher
   DB: D1Database
   EMAIL: { send(message: { to: string; from: string; subject: string; html: string; text: string }): Promise<unknown> }
+  AI: { run(model: string, input: unknown): Promise<{ response?: string }> }
   TEAM_DOMAIN: string
   POLICY_AUD: string
   ADMIN_EMAIL: string
@@ -94,6 +95,21 @@ async function logout(request: Request, env: Env) {
   const session = cookieValue(request, 'pilot_session'); if (session) await env.DB.prepare(`DELETE FROM sessions WHERE id = ?`).bind(session).run()
   return new Response(null, { status: 204, headers: { 'Set-Cookie': 'pilot_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0' } })
 }
+async function parseReceipt(request: Request, env: Env) {
+  const user = await identity(request, env); if (!user) return Response.json({ error: 'Autentificare necesară.' }, { status: 401 })
+  const form = await request.formData().catch(() => null); const file = form?.get('file')
+  if (!(file instanceof File) || !file.type.startsWith('image/')) return Response.json({ error: 'Încarcă o fotografie sau un screenshot al bonului.' }, { status: 400 })
+  if (file.size > 5 * 1024 * 1024) return Response.json({ error: 'Imaginea trebuie să fie mai mică de 5 MB.' }, { status: 413 })
+  const bytes = new Uint8Array(await file.arrayBuffer()); let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte)
+  const image = `data:${file.type};base64,${btoa(binary)}`
+  const result = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', { messages: [
+    { role: 'system', content: 'Ești un extractor de date din bonuri moldovenești. Răspunde doar cu JSON valid, fără markdown, cu cheile title, category, amount, currency, date. amount este număr pozitiv, currency este MDL sau EUR, date este YYYY-MM-DD. Dacă un câmp nu este lizibil, folosește null.' },
+    { role: 'user', content: 'Extrage datele de pe acest bon fiscal.', image },
+  ], max_tokens: 300 })
+  const raw = result?.response ?? ''; let data: Record<string, unknown> = {}
+  try { data = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '').trim()) } catch { return Response.json({ error: 'Bonul nu a putut fi citit. Încearcă o fotografie mai clară.' }, { status: 422 }) }
+  return Response.json({ extracted: { title: typeof data.title === 'string' ? data.title : '', category: typeof data.category === 'string' ? data.category : 'Altele', amount: typeof data.amount === 'number' ? data.amount : null, currency: data.currency === 'EUR' ? 'EUR' : 'MDL', date: typeof data.date === 'string' ? data.date : '' } })
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -102,6 +118,7 @@ export default {
     if (url.pathname === '/api/auth/request-code' && request.method === 'POST') return requestCode(request, env)
     if (url.pathname === '/api/auth/verify-code' && request.method === 'POST') return verifyCode(request, env)
     if (url.pathname === '/api/auth/logout' && request.method === 'POST') return logout(request, env)
+    if (url.pathname === '/api/receipt/parse' && request.method === 'POST') return parseReceipt(request, env)
     if (url.pathname === '/api/me' && request.method === 'GET') {
       const user = await identity(request, env)
       return user ? Response.json({ user }) : Response.json({ error: 'Autentificare necesară.' }, { status: 401 })

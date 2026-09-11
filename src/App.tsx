@@ -197,13 +197,16 @@ function EntrySheet({ mode, initial, onClose, onSave }: { mode: 'expense' | 'inc
   const dialog = useRef<HTMLDialogElement>(null)
   const [source, setSource] = useState<Source | null>(initial ? 'manual' : null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [ocr, setOcr] = useState<{ title?: string; category?: string; amount?: number | null; currency?: 'EUR' | 'MDL'; date?: string } | null>(null)
+  const [ocrState, setOcrState] = useState<'idle' | 'reading' | 'done' | 'error'>('idle')
+  useEffect(() => { if (!selectedFile || source === 'manual') return; const run = async () => { setOcrState('reading'); const data = new FormData(); data.append('file', selectedFile); const response = await fetch('/api/receipt/parse', { method: 'POST', body: data }); const result = await response.json().catch(() => ({})); if (!response.ok) setOcrState('error'); else { setOcr(result.extracted); setOcrState('done') } }; run().catch(() => setOcrState('error')) }, [selectedFile, source])
   useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close() }, [])
   return <dialog ref={dialog} className="entry-sheet" onCancel={onClose} onClick={event => { if (event.target === event.currentTarget) { const bounds = event.currentTarget.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose() } }} aria-labelledby="entry-title">
     <div className="sheet-top"><div><p className="eyebrow">{initial ? 'MODIFICĂ TRANZACȚIA' : 'TRANZACȚIE NOUĂ'}</p><h2 id="entry-title">{initial ? 'Editează tranzacția' : mode === 'expense' ? 'Adaugă cheltuială' : 'Adaugă venit'}</h2></div><button type="button" className="close-button" onClick={onClose} aria-label="Închide"><X size={20} /></button></div>
     {source === null ? <ImportSourcePicker mode={mode} onChoose={(next, file) => { setSource(next); setSelectedFile(file ?? null) }} /> : <>
-      {selectedFile && <div className="import-selected"><strong>{selectedFile.name}</strong><span>Fișier selectat. Extragerea automată va fi disponibilă odată cu modulul OCR.</span><button type="button" className="text-button" onClick={() => { setSource(null); setSelectedFile(null) }}>Alege altă sursă</button></div>}
+      {selectedFile && <div className="import-selected"><strong>{selectedFile.name}</strong><span>{ocrState === 'reading' ? 'Se citește bonul…' : ocrState === 'done' ? 'Datele au fost extrase. Verifică-le înainte de salvare.' : ocrState === 'error' ? 'Nu am putut citi bonul. Completează câmpurile manual.' : ''}</span><button type="button" className="text-button" onClick={() => { setSource(null); setSelectedFile(null); setOcr(null); setOcrState('idle') }}>Alege altă sursă</button></div>}
       <p className="sheet-copy">Introdu suma în moneda în care ai plătit sau încasat.</p>
-      <TransactionForm mode={mode} initial={initial} onClose={onClose} onSave={onSave} />
+      <TransactionForm mode={mode} initial={initial} prefill={ocr ? { title: ocr.title, category: ocr.category, amount: ocr.amount ?? undefined, originalCurrency: ocr.currency, date: ocr.date } : undefined} onClose={onClose} onSave={onSave} />
     </>}
     <p className="privacy-note"><ScanLine size={15} /> Salvare pe acest dispozitiv, în browserul curent.</p>
   </dialog>
