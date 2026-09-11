@@ -135,6 +135,14 @@ When continuing this project, read this file first, preserve existing design and
 - The project is ready for a deployment target, but it is not yet a multi-user production backend: ledger and goal data currently live in each browser's localStorage. The BNM exchange endpoint runs through the bundled Node/Vite server.
 - Day-to-day online use and a Backoffice require the next architecture step: hosted API/database, authentication, user ownership, receipt file storage/OCR jobs, and an admin role for CMS controls.
 
+## Cloudflare foundation deployed
+
+- Wrangler 4.131.0 authenticated to the user's Cloudflare account.
+- D1 database `pilot-ledger-prod` was created in region EEUR with ID `9a4a02df-ccaa-4865-9bb3-2287c571b1ff`; migration `0001_initial.sql` applied remotely.
+- Worker `pilot-ledger` is live at `https://pilot-ledger.ddumitru6.workers.dev` and serves the built app plus the validated BNM rate endpoint.
+- Live checks passed for the homepage and `/api/exchange-rate?date=2026-09-11`.
+- The deployed Worker intentionally returns 401 for financial API routes until authentication is implemented. D1 is provisioned but localStorage remains the app's active data store for now.
+
 ## Display currency preference updated
 
 - Latest user instruction supersedes dual EUR/MDL lines: show only one currency at a time, EUR by default, with one EUR/MDL toggle in the top bar.
