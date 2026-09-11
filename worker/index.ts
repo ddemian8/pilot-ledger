@@ -107,7 +107,12 @@ async function parseReceipt(request: Request, env: Env) {
     { role: 'user', content: 'Extrage datele de pe acest bon fiscal.' },
   ], max_tokens: 300 })
   const raw = result?.response ?? ''; let data: Record<string, unknown> = {}
-  try { data = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '').trim()) } catch { return Response.json({ error: 'Bonul nu a putut fi citit. Încearcă o fotografie mai clară.' }, { status: 422 }) }
+  try {
+    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/gi, '').trim()
+    data = JSON.parse(cleaned)
+  } catch {
+    try { const match = raw.match(/\{[\s\S]*\}/); if (!match) throw new Error('no json'); data = JSON.parse(match[0]) } catch { return Response.json({ error: 'Bonul nu a putut fi citit. Încearcă o fotografie mai clară, cu textul încadrat complet.' }, { status: 422 }) }
+  }
   return Response.json({ extracted: { title: typeof data.title === 'string' ? data.title : '', category: typeof data.category === 'string' ? data.category : 'Altele', amount: typeof data.amount === 'number' ? data.amount : null, currency: data.currency === 'EUR' ? 'EUR' : 'MDL', date: typeof data.date === 'string' ? data.date : '' } })
 }
 
