@@ -138,6 +138,7 @@ export default {
     if (url.pathname === '/api/auth/verify-code' && request.method === 'POST') return verifyCode(request, env)
     if (url.pathname === '/api/auth/logout' && request.method === 'POST') return logout(request, env)
     if (url.pathname === '/api/receipt/parse' && request.method === 'POST') return parseReceipt(request, env)
+    if (url.pathname === '/api/ocr-status' && request.method === 'GET') return Response.json({ provider: env.OPENAI_API_KEY ? 'openai' : 'cloudflare' })
     if (url.pathname === '/api/me' && request.method === 'GET') {
       const user = await identity(request, env)
       return user ? Response.json({ user }) : Response.json({ error: 'Autentificare necesară.' }, { status: 401 })
