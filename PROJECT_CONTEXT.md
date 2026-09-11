@@ -129,6 +129,12 @@ When continuing this project, read this file first, preserve existing design and
 - Receipt photo/OCR capture remains a future feature; its MDL/EUR storage and conversion path is now prepared.
 - All 25 tests pass, covering conversions, original currency preservation, date validation, BNM XML parsing, offline errors, cache deduplication, Moldova midnight and integer display. Build and live development/production endpoint checks pass. Interactive visual browser QA remains outstanding.
 
+## GitHub repository connected
+
+- Local Git repository initialized on `main` and first commit `17e1718` pushed to `https://github.com/ddemian8/pilot-ledger`.
+- The project is ready for a deployment target, but it is not yet a multi-user production backend: ledger and goal data currently live in each browser's localStorage. The BNM exchange endpoint runs through the bundled Node/Vite server.
+- Day-to-day online use and a Backoffice require the next architecture step: hosted API/database, authentication, user ownership, receipt file storage/OCR jobs, and an admin role for CMS controls.
+
 ## Display currency preference updated
 
 - Latest user instruction supersedes dual EUR/MDL lines: show only one currency at a time, EUR by default, with one EUR/MDL toggle in the top bar.
