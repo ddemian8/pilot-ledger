@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
+
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="#F7F8F4"/>
+  <g transform="translate(28 46) scale(.95)">
+  <!-- Racing/checker progress motif -->
+  <path d="M18 78H42L52 58H28L18 78Z" fill="#164D3A"/>
+  <path d="M42 58H66L76 38H52L42 58Z" fill="#1D7354"/>
+  <path d="M42 98H66L76 78H52L42 98Z" fill="#6650A5"/>
+  <path d="M66 78H90L100 58H76L66 78Z" fill="#164D3A"/>
+
+  <!-- P / track shape -->
+  <path d="M94 24H138C164 24 182 42 182 66C182 91 164 108 138 108H126V138H96V78H137C147 78 153 73 153 66C153 59 147 54 137 54H94V24Z" fill="#164D3A"/>
+
+  <!-- financial bars -->
+  <rect x="88" y="96" width="14" height="46" rx="4" fill="#1D7354"/>
+  <rect x="108" y="82" width="14" height="60" rx="4" fill="#164D3A"/>
+  <rect x="128" y="66" width="14" height="76" rx="4" fill="#1D7354"/>
+</g>
+
+</svg>
