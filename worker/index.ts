@@ -3,6 +3,7 @@ interface Env {
   DB: D1Database
   EMAIL: { send(message: { to: string; from: string; subject: string; html: string; text: string }): Promise<unknown> }
   AI: { run(model: string, input: unknown): Promise<{ response?: string }> }
+  OPENAI_API_KEY?: string
   TEAM_DOMAIN: string
   POLICY_AUD: string
   ADMIN_EMAIL: string
@@ -101,6 +102,17 @@ async function parseReceipt(request: Request, env: Env) {
   if (!(file instanceof File) || (!file.type.startsWith('image/') && file.type !== 'application/pdf')) return Response.json({ error: 'Încarcă o fotografie, un screenshot sau un PDF al bonului.' }, { status: 400 })
   if (file.size > 5 * 1024 * 1024) return Response.json({ error: 'Imaginea trebuie să fie mai mică de 5 MB.' }, { status: 413 })
   const bytes = new Uint8Array(await file.arrayBuffer())
+  if (env.OPENAI_API_KEY) {
+    let encodedBinary = ''; for (const byte of bytes) encodedBinary += String.fromCharCode(byte)
+    const encoded = `data:${file.type || 'application/octet-stream'};base64,${btoa(encodedBinary)}`
+    const content = file.type === 'application/pdf'
+      ? [{ type: 'input_text', text: 'Extrage datele de pe acest bon fiscal.' }, { type: 'input_file', filename: file.name, file_data: encoded }]
+      : [{ type: 'input_text', text: 'Extrage datele de pe acest bon fiscal.' }, { type: 'input_image', image_url: encoded, detail: 'high' }]
+    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'gpt-4.1-mini', input: [{ role: 'system', content: [{ type: 'input_text', text: 'Extrage date din bon fiscal moldovenesc. Returnează exclusiv JSON cu title, category, amount, currency și date. Nu inventa valori.' }] }, { role: 'user', content }], text: { format: { type: 'json_schema', name: 'receipt', strict: true, schema: { type: 'object', properties: { title: { type: ['string', 'null'] }, category: { type: ['string', 'null'] }, amount: { type: ['number', 'null'] }, currency: { type: ['string', 'null'], enum: ['MDL', 'EUR', null] }, date: { type: ['string', 'null'] } }, required: ['title', 'category', 'amount', 'currency', 'date'], additionalProperties: false } } } }) })
+    const result = await response.json().catch(() => null) as { output_text?: string } | null
+    if (!response.ok || !result?.output_text) return Response.json({ error: 'OpenAI nu a putut analiza bonul. Încearcă o fotografie mai clară.' }, { status: 502 })
+    try { const data = JSON.parse(result.output_text) as Record<string, unknown>; return Response.json({ extracted: { title: typeof data.title === 'string' ? data.title : '', category: typeof data.category === 'string' ? data.category : 'Altele', amount: typeof data.amount === 'number' ? data.amount : null, currency: data.currency === 'EUR' ? 'EUR' : 'MDL', date: typeof data.date === 'string' ? data.date : '' } }) } catch { return Response.json({ error: 'Răspunsul OCR nu a putut fi interpretat.' }, { status: 422 }) }
+  }
   let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte)
   const image = `data:${file.type};base64,${btoa(binary)}`
   const result = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', { image, messages: [
