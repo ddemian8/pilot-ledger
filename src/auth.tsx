@@ -9,7 +9,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  useEffect(() => { fetch('/api/me').then(response => setAuthenticated(response.ok)).catch(() => {}).finally(() => setReady(true)) }, [])
+  useEffect(() => { if (location.hostname.endsWith('.workers.dev')) { location.replace(`https://pilot-ledger.download${location.pathname}${location.search}`); return } fetch('/api/me', { cache: 'no-store' }).then(response => setAuthenticated(response.ok)).catch(() => {}).finally(() => setReady(true)) }, [])
   if (!ready) return <div className="auth-shell"><div className="auth-card"><strong>Pilot Ledger</strong><p>Se verifică sesiunea…</p></div></div>
   if (authenticated) return <>{children}</>
   const request = async () => {
