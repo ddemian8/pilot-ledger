@@ -7,6 +7,7 @@ import { GlassAction } from './components/GlassAction'
 import { SavingsGoalCard } from './components/SavingsGoalCard'
 import { useEffect, useRef, useState } from 'react'
 import { PendingInbox } from './PendingInbox'
+import { InstallPrompt } from './components/InstallPrompt'
 import { readPending } from './pending'
 import { changeTransaction, monthlyTotals, readTransactions, STORAGE_KEY, today, type Transaction } from './ledger'
 import {
@@ -223,6 +224,7 @@ function App() {
 
       {entryMode && <EntrySheet mode={entryMode} onClose={() => setEntryMode(null)} onSave={save} />}
       {editing && <EntrySheet key={editing.id} mode={editing.mode} initial={editing} onClose={() => setEditing(null)} onSave={editSave} />}
+      <InstallPrompt />
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Închide notificarea"><X size={15} /></button></div>}
     </main>
   )
