@@ -7,6 +7,8 @@ interface Env {
   TEAM_DOMAIN: string
   POLICY_AUD: string
   ADMIN_EMAIL: string
+  SUPABASE_URL?: string
+  SUPABASE_ANON_KEY?: string
 }
 
 type Rate = { date: string; mdlPerEur: number; source: 'BNM'; fetchedAt: string }
@@ -61,9 +63,17 @@ function cookieValue(request: Request, name: string) {
 }
 async function identity(request: Request, env: Env) {
   const session = cookieValue(request, 'pilot_session')
-  if (!session) return null
-  const row = await env.DB.prepare(`SELECT users.email, users.role FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id = ? AND sessions.expires_at > datetime('now')`).bind(session).first<{ email: string; role: string }>()
-  return row ? { email: row.email, role: row.role } : null
+  if (session) {
+    const row = await env.DB.prepare(`SELECT users.email, users.role FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id = ? AND sessions.expires_at > datetime('now')`).bind(session).first<{ email: string; role: string }>()
+    if (row) return { email: row.email, role: row.role }
+  }
+  const bearer = request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+  if (bearer && env.SUPABASE_URL && env.SUPABASE_ANON_KEY) {
+    const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, { headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${bearer}` } }).catch(() => null)
+    const user = await response?.json().catch(() => null) as { email?: string } | null
+    if (response?.ok && user?.email) return { email: user.email, role: 'user' }
+  }
+  return null
 }
 async function requestCode(request: Request, env: Env) {
   const body = await request.json().catch(() => null) as { email?: string } | null

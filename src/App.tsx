@@ -8,6 +8,7 @@ import { SavingsGoalCard } from './components/SavingsGoalCard'
 import { useEffect, useRef, useState } from 'react'
 import { PendingInbox } from './PendingInbox'
 import { InstallPrompt } from './components/InstallPrompt'
+import { loadRemoteTransactions, saveRemoteTransaction, supabase } from './supabase'
 import { readPending } from './pending'
 import { changeTransaction, monthlyTotals, readTransactions, STORAGE_KEY, today, type Transaction } from './ledger'
 import {
@@ -53,6 +54,7 @@ function App() {
   const [largeExpenseAlerts, setLargeExpenseAlerts] = useState(true)
   const [monthlySummary, setMonthlySummary] = useState(true)
   const [autoCategory, setAutoCategory] = useState(true)
+  useEffect(() => { if (!supabase) return; loadRemoteTransactions().then(remote => { if (remote.length) setTransactions(remote) }).catch(() => setNotice('Nu am putut sincroniza datele. Datele locale rămân disponibile.')) }, [])
   const [pendingCount, setPendingCount] = useState(() => { try { return readPending().filter(t => !t.ignored && !loaded.transactions.some(saved => saved.id === t.id)).length } catch { return 0 } })
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all')
@@ -89,6 +91,7 @@ function App() {
       const next = [entry, ...readTransactions(true)]
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
       setTransactions(next)
+      void saveRemoteTransaction(entry).catch(() => setNotice('Tranzacția este salvată local, dar sincronizarea a eșuat.'))
       setEntryMode(null)
       setNotice('Tranzacția a fost salvată.')
       return ''
@@ -99,6 +102,7 @@ function App() {
     if (!editing) return 'Tranzacția nu mai este disponibilă.'
     try {
       setTransactions(changeTransaction(editing, entry))
+      void saveRemoteTransaction(entry).catch(() => setNotice('Modificarea este salvată local, dar sincronizarea a eșuat.'))
       setEditing(null)
       setNotice('Tranzacția a fost actualizată.')
       return ''
@@ -108,6 +112,7 @@ function App() {
     try {
       const removed = { ...entry, deleted: true }
       setTransactions(changeTransaction(entry, removed))
+      void saveRemoteTransaction(removed).catch(() => setNotice('Ștergerea este salvată local, dar sincronizarea a eșuat.'))
       setDeleted(removed)
       setDeleting(null)
       setActionError('')
@@ -118,6 +123,7 @@ function App() {
     if (!deleted) return
     try {
       setTransactions(changeTransaction(deleted, { ...deleted, deleted: false }))
+      void saveRemoteTransaction({ ...deleted, deleted: false }).catch(() => setNotice('Restaurarea este salvată local, dar sincronizarea a eșuat.'))
       setDeleted(null)
       setActionError('')
       setNotice('Tranzacția a fost restaurată.')
@@ -216,7 +222,7 @@ function App() {
           <PendingInbox transactions={ledger} onApproved={setTransactions} onCount={setPendingCount} />
 
           <details className="exchange-details"><summary>Curs valutar · BNM</summary><ExchangeStatus /></details>
-          <section className="settings-section" id="settings" aria-labelledby="settings-title"><div className="page-header"><div><p className="eyebrow">CONTUL TĂU</p><h1 id="settings-title">Setări</h1></div></div><div className="settings-stack"><article className="settings-card settings-profile-card"><div className="settings-profile-avatar">DD</div><div><h3>Dumitru</h3><p>ddemian6@gmail.com</p></div><button className="settings-pale-button" onClick={() => setNotice('Profilul este gestionat prin autentificarea email.')}>Vezi profilul</button></article><article className="settings-card settings-wide-card"><h3>Monedă și curs valutar</h3><div className="settings-row"><span>Preferință monedă</span><CurrencyToggle /></div><div className="settings-row"><span>Curs valutar BNM</span><strong>1 EUR = cursul zilei</strong></div><div className="settings-row"><span>Ultima actualizare</span><strong>{new Date().toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong></div></article><article className="settings-card settings-wide-card"><h3>Preferințe</h3><SettingsToggle label="Notificări pentru cheltuieli mari" checked={largeExpenseAlerts} onChange={setLargeExpenseAlerts} /><SettingsToggle label="Rezumat lunar automat" checked={monthlySummary} onChange={setMonthlySummary} /><SettingsToggle label="Detectează automat categoria bonului" checked={autoCategory} onChange={setAutoCategory} /></article><article className="settings-card settings-wide-card"><h3>Stocare locală și confidențialitate</h3><p className="settings-copy">Datele tale ({transactions.length} tranzacții, obiectivul tău) sunt salvate local, doar în acest browser — nu sunt trimise către niciun server extern.</p><p className="settings-copy">Poți exporta sau șterge definitiv toate datele în orice moment.</p></article><article className="settings-card settings-wide-card"><h3>Datele tale</h3><div className="settings-actions"><button className="settings-pale-button" onClick={() => setNotice('Exportul datelor va fi disponibil în curând.')}>Exportă datele</button><button className="settings-danger-button" onClick={() => setNotice('Pentru siguranță, ștergerea totală se face după confirmare.')}>Șterge toate datele</button></div></article><button className="logout-button" onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {}); location.reload() }}>Deconectare</button></div></section>
+          <section className="settings-section" id="settings" aria-labelledby="settings-title"><div className="page-header"><div><p className="eyebrow">CONTUL TĂU</p><h1 id="settings-title">Setări</h1></div></div><div className="settings-stack"><article className="settings-card settings-profile-card"><div className="settings-profile-avatar">DD</div><div><h3>Dumitru</h3><p>ddemian6@gmail.com</p></div><button className="settings-pale-button" onClick={() => setNotice('Profilul este gestionat prin autentificarea email.')}>Vezi profilul</button></article><article className="settings-card settings-wide-card"><h3>Monedă și curs valutar</h3><div className="settings-row"><span>Preferință monedă</span><CurrencyToggle /></div><div className="settings-row"><span>Curs valutar BNM</span><strong>1 EUR = cursul zilei</strong></div><div className="settings-row"><span>Ultima actualizare</span><strong>{new Date().toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong></div></article><article className="settings-card settings-wide-card"><h3>Preferințe</h3><SettingsToggle label="Notificări pentru cheltuieli mari" checked={largeExpenseAlerts} onChange={setLargeExpenseAlerts} /><SettingsToggle label="Rezumat lunar automat" checked={monthlySummary} onChange={setMonthlySummary} /><SettingsToggle label="Detectează automat categoria bonului" checked={autoCategory} onChange={setAutoCategory} /></article><article className="settings-card settings-wide-card"><h3>Stocare locală și confidențialitate</h3><p className="settings-copy">Datele tale ({transactions.length} tranzacții, obiectivul tău) sunt salvate local și, după conectarea Supabase, sincronizate securizat pe contul tău.</p><p className="settings-copy">Poți exporta sau șterge definitiv toate datele în orice moment.</p></article><article className="settings-card settings-wide-card"><h3>Datele tale</h3><div className="settings-actions"><button className="settings-pale-button" onClick={() => setNotice('Exportul datelor va fi disponibil în curând.')}>Exportă datele</button><button className="settings-danger-button" onClick={() => setNotice('Pentru siguranță, ștergerea totală se face după confirmare.')}>Șterge toate datele</button></div></article><button className="logout-button" onClick={async () => { if (supabase) await supabase.auth.signOut(); else await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {}); location.reload() }}>Deconectare</button></div></section>
           <footer className="app-footer"><span><ScanLine size={16} /> Tranzacțiile sunt păstrate în acest browser</span><span>Salvare locală · acest browser</span></footer>
         </div>
         <nav className="mobile-bottom-nav" aria-label="Navigație rapidă"><button className={activePage === 'overview' ? 'active' : ''} onClick={() => navigate('overview')}><Gauge size={20} /><span>Overview</span></button><button className={activePage === 'transactions' ? 'active' : ''} onClick={() => navigate('transactions')}><WalletCards size={20} /><span>Tranzacții</span></button><button className={activePage === 'goals' ? 'active' : ''} onClick={() => navigate('goals')}><Target size={20} /><span>Obiective</span></button><button className={activePage === 'analytics' ? 'active' : ''} onClick={() => navigate('analytics')}><BarChart3 size={20} /><span>Analitică</span></button><button className={activePage === 'settings' ? 'active' : ''} onClick={() => navigate('settings')}><Settings2 size={20} /><span>Setări</span></button></nav>
