@@ -475,10 +475,13 @@ function __OriginkitBase_LiquidGlassButton(props: Props) {
                 alt=""
                 aria-hidden
                 draggable={false}
-                style={{
-                    width: iconPx,
-                    height: iconPx,
-                    margin: iconPadPx,
+                    style={{
+                        width: iconPx,
+                        height: iconPx,
+                        margin: 0,
+                        padding: iconPadPx,
+                        boxSizing: "content-box",
+                        backgroundColor: iconPadPx > 0 ? "rgba(255,255,255,.15)" : undefined,
 
                     objectFit: iconRadius > 0 ? "cover" : "contain",
                     borderRadius: Math.min(iconRadius, iconPx / 2),
