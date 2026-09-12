@@ -188,7 +188,7 @@ function App() {
           <section className="trend-panel" aria-labelledby="trend-title">
             <div className="section-heading"><div><p className="eyebrow">ULTIMELE 6 LUNI</p><h2 id="trend-title">Evoluție financiară</h2></div><div className="trend-legend"><span><i className="dot green-dot" /> Venituri</span><span><i className="dot purple-dot" /> Cheltuieli</span></div></div>
             <div className="trend-chart" aria-label="Grafic cu veniturile și cheltuielile din ultimele șase luni">
-              {trend.map((month) => <div className="trend-column" key={month.key}><div className="trend-bars"><span className="trend-bar income" style={{ height: `${Math.max(month.income ? 8 : 2, month.income / maxTrend * 100)}%` }} title={`Venituri ${formatAmount(month.income).text}`} /><span className="trend-bar expense" style={{ height: `${Math.max(month.expense ? 8 : 2, month.expense / maxTrend * 100)}%` }} title={`Cheltuieli ${formatAmount(month.expense).text}`} /></div><small>{month.label}</small></div>)}
+              {trend.map((month) => <div className="trend-column" key={month.key}><div className="trend-bars"><div className="trend-bar-wrap"><strong>{formatAmount(month.income).text}</strong><span className="trend-bar income" style={{ height: `${Math.max(month.income ? 8 : 2, month.income / maxTrend * 100)}%` }} title={`Venituri ${formatAmount(month.income).text}`} /></div><div className="trend-bar-wrap"><strong>{formatAmount(month.expense).text}</strong><span className="trend-bar expense" style={{ height: `${Math.max(month.expense ? 8 : 2, month.expense / maxTrend * 100)}%` }} title={`Cheltuieli ${formatAmount(month.expense).text}`} /></div></div><small>{month.label}</small></div>)}
             </div>
           </section>
 
