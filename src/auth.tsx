@@ -27,7 +27,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (supabase) {
       const address = email.trim().toLowerCase()
       if (!/^\S+@\S+\.\S+$/.test(address)) { setBusy(false); setError('Introdu o adresă de email validă.'); return }
-      const response = await supabase.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true } })
+      const response = await supabase.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true, emailRedirectTo: window.location.origin } })
       setBusy(false); if (response.error) setError(response.error.message); else setCodeSent(true); return
     }
     const response = await fetch('/api/auth/request-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ADMIN_EMAIL }) })
